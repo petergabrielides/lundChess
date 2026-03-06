@@ -1,0 +1,1712 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Combo Chess</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0e0e0f;
+    --surface: #18181b;
+    --surface2: #222228;
+    --border: #2e2e38;
+    --accent: #c8a96e;
+    --accent2: #e8c98e;
+    --light-sq: #f0d9b5;
+    --dark-sq: #b58863;
+    --light-sq-sel: #f6f669;
+    --dark-sq-sel: #baca2b;
+    --light-sq-move: #cdd26a;
+    --dark-sq-move: #aaa23a;
+    --combo-glow: rgba(200, 169, 110, 0.5);
+    --text: #e8e8e8;
+    --text-muted: #888;
+    --danger: #e05c5c;
+    --success: #5cb85c;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 24px 16px;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 28px;
+  }
+
+  header h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 2.6rem;
+    font-weight: 900;
+    color: var(--accent2);
+    letter-spacing: 0.04em;
+    line-height: 1;
+  }
+
+  header p {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    margin-top: 6px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .main-layout {
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    justify-content: center;
+    width: 100%;
+    max-width: 1100px;
+  }
+
+  /* ── Board ── */
+  .board-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .rank-labels {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .board-row-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .file-labels {
+    display: flex;
+    gap: 0;
+  }
+
+  .coord-label {
+    width: 72px;
+    height: 20px;
+    text-align: center;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    font-family: 'IBM Plex Mono', monospace;
+    line-height: 20px;
+  }
+
+  .rank-label {
+    width: 20px;
+    height: 72px;
+    text-align: center;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    font-family: 'IBM Plex Mono', monospace;
+    line-height: 72px;
+  }
+
+  #board {
+    display: grid;
+    grid-template-columns: repeat(8, 72px);
+    grid-template-rows: repeat(8, 72px);
+    border: 2px solid var(--border);
+    box-shadow: 0 0 40px rgba(200,169,110,0.08), 0 8px 32px rgba(0,0,0,0.6);
+  }
+
+  .square {
+    width: 72px;
+    height: 72px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    position: relative;
+    transition: filter 0.1s;
+    user-select: none;
+  }
+
+  .square.light { background: var(--light-sq); }
+  .square.dark  { background: var(--dark-sq); }
+  .square.selected.light { background: var(--light-sq-sel); }
+  .square.selected.dark  { background: var(--dark-sq-sel); }
+  .square.move-hint.light { background: var(--light-sq-move); }
+  .square.move-hint.dark  { background: var(--dark-sq-move); }
+  .square.last-move-from.light { background: #f6ed72; }
+  .square.last-move-from.dark  { background: #c9c131; }
+  .square.last-move-to.light { background: #f6ed72; }
+  .square.last-move-to.dark  { background: #c9c131; }
+  .square:hover { filter: brightness(1.08); }
+
+  /* Move hint dot */
+  .square.move-hint::before {
+    content: '';
+    position: absolute;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.18);
+    pointer-events: none;
+    z-index: 1;
+  }
+  .square.move-hint.capture-hint::before {
+    width: 68px;
+    height: 68px;
+    background: transparent;
+    border: 4px solid rgba(0,0,0,0.2);
+    border-radius: 50%;
+  }
+
+  /* Pieces */
+  .piece-img {
+    width: 58px;
+    height: 58px;
+    z-index: 2;
+    pointer-events: none;
+    display: block;
+    filter: drop-shadow(0 2px 3px rgba(0,0,0,0.35));
+  }
+
+  /* Combo piece: two smaller images in corners */
+  .combo-piece-wrap {
+    position: relative;
+    width: 66px;
+    height: 66px;
+    z-index: 2;
+    pointer-events: none;
+  }
+  /* upper-right: lower-value piece */
+  .combo-piece-wrap .piece-top {
+    position: absolute;
+    top: 1px; right: 1px;
+    width: 36px;
+    height: 36px;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
+  }
+  /* lower-left: higher-value piece */
+  .combo-piece-wrap .piece-bottom {
+    position: absolute;
+    bottom: 1px; left: 1px;
+    width: 36px;
+    height: 36px;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
+  }
+  .combo-piece-wrap::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 4px;
+    box-shadow: 0 0 12px 3px var(--combo-glow);
+    pointer-events: none;
+  }
+
+  /* ── Side Panels ── */
+  .side-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 240px;
+    max-width: 280px;
+  }
+
+  .panel-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px;
+  }
+
+  .panel-box h3 {
+    font-family: 'Playfair Display', serif;
+    font-size: 0.95rem;
+    color: var(--accent);
+    margin-bottom: 10px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    font-weight: 700;
+  }
+
+  /* Status */
+  #status-text {
+    font-size: 0.82rem;
+    line-height: 1.6;
+    color: var(--text);
+  }
+
+  .turn-indicator {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .turn-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    flex-shrink: 0;
+  }
+  .turn-dot.white { background: #f0d9b5; border-color: #aaa; }
+  .turn-dot.black { background: #222; border-color: #666; }
+
+  .turn-label {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  /* Combo status */
+  .combo-status-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+  .combo-status-row span.active {
+    color: var(--accent2);
+    font-weight: 500;
+  }
+
+  /* Move log */
+  #move-log {
+    font-size: 0.72rem;
+    line-height: 1.8;
+    color: var(--text-muted);
+    max-height: 220px;
+    overflow-y: auto;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+  #move-log::-webkit-scrollbar { width: 4px; }
+  #move-log::-webkit-scrollbar-track { background: var(--surface2); }
+  #move-log::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .move-pair { display: flex; gap: 8px; padding: 2px 0; }
+  .move-num { color: var(--accent); min-width: 24px; }
+  .move-w { color: var(--text); min-width: 90px; }
+  .move-b { color: #aaa; }
+
+  /* Captured */
+  #captured-white, #captured-black {
+    font-size: 1.2rem;
+    line-height: 1.5;
+    min-height: 28px;
+    letter-spacing: 2px;
+  }
+  .cap-label {
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 4px;
+  }
+
+  /* Buttons */
+  .btn-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  button {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.75rem;
+    padding: 8px 14px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    border-radius: 4px;
+    cursor: pointer;
+    letter-spacing: 0.06em;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    text-transform: uppercase;
+  }
+  button:hover { background: var(--border); border-color: var(--accent); color: var(--accent2); }
+  button.primary { background: var(--accent); color: #111; border-color: var(--accent); font-weight: 600; }
+  button.primary:hover { background: var(--accent2); border-color: var(--accent2); }
+
+  /* Promotion modal */
+  #promo-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.75);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+  #promo-modal.open { display: flex; }
+  .promo-box {
+    background: var(--surface);
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 28px;
+    text-align: center;
+  }
+  .promo-box h3 {
+    font-family: 'Playfair Display', serif;
+    color: var(--accent2);
+    margin-bottom: 18px;
+    font-size: 1.1rem;
+  }
+  .promo-choices {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .promo-btn {
+    font-size: 2.4rem;
+    padding: 10px 14px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .promo-btn span.lbl { font-size: 0.65rem; color: var(--text-muted); font-family: 'IBM Plex Mono', monospace; text-transform: uppercase; }
+  .promo-btn:hover { background: var(--border); border-color: var(--accent); }
+
+  /* Dissolve modal */
+  #dissolve-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.75);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+  #dissolve-modal.open { display: flex; }
+  .dissolve-box {
+    background: var(--surface);
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 28px;
+    text-align: center;
+    max-width: 340px;
+  }
+  .dissolve-box h3 {
+    font-family: 'Playfair Display', serif;
+    color: var(--accent2);
+    margin-bottom: 10px;
+  }
+  .dissolve-box p {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    margin-bottom: 18px;
+    line-height: 1.6;
+  }
+  .dissolve-choices {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+  }
+  .dissolve-btn {
+    font-size: 2.2rem;
+    padding: 10px 16px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.15s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .dissolve-btn span.lbl { font-size: 0.65rem; color: var(--text-muted); font-family: 'IBM Plex Mono', monospace; }
+  .dissolve-btn:hover { background: var(--border); border-color: var(--accent); }
+
+  /* Game over banner */
+  #gameover-banner {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.82);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+  }
+  #gameover-banner.open { display: flex; }
+  .gameover-box {
+    background: var(--surface);
+    border: 2px solid var(--accent);
+    border-radius: 10px;
+    padding: 40px 52px;
+    text-align: center;
+  }
+  .gameover-box h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: 2rem;
+    color: var(--accent2);
+    margin-bottom: 10px;
+  }
+  .gameover-box p {
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    margin-bottom: 24px;
+  }
+
+  .message-bar {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px 14px;
+    font-size: 0.76rem;
+    color: var(--accent);
+    min-height: 34px;
+    line-height: 1.5;
+  }
+
+  @media (max-width: 700px) {
+    #board { grid-template-columns: repeat(8, 44px); grid-template-rows: repeat(8, 44px); }
+    .square { width: 44px; height: 44px; }
+    .piece-img { width: 38px; height: 38px; }
+    .coord-label { width: 44px; }
+    .rank-label { height: 44px; line-height: 44px; }
+    .combo-piece-wrap { width: 42px; height: 42px; }
+    .combo-piece-wrap .piece-top,
+    .combo-piece-wrap .piece-bottom { width: 24px; height: 24px; }
+    header h1 { font-size: 1.8rem; }
+    .side-panel { max-width: 100%; min-width: unset; width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Combo Chess</h1>
+  <p>by IM Silas Esben Lund &nbsp;·&nbsp; Local Two-Player</p>
+</header>
+
+<div class="main-layout">
+  <!-- Left panel -->
+  <div class="side-panel">
+    <div class="panel-box">
+      <div class="turn-indicator">
+        <div class="turn-dot white" id="turn-dot"></div>
+        <div class="turn-label" id="turn-label">White's Turn</div>
+      </div>
+      <div id="status-text">Select a piece to move.</div>
+      <div class="combo-status-row">
+        <span>White combo: <span id="white-combo-status">none</span></span>
+      </div>
+      <div class="combo-status-row">
+        <span>Black combo: <span id="black-combo-status">none</span></span>
+      </div>
+    </div>
+
+    <div class="panel-box">
+      <div class="btn-row">
+        <button class="primary" onclick="newGame()">New Game</button>
+        <button onclick="undoMove()">Undo</button>
+      </div>
+    </div>
+
+    <div class="panel-box">
+      <h3>Move History</h3>
+      <div id="move-log"></div>
+    </div>
+  </div>
+
+  <!-- Board -->
+  <div class="board-wrap">
+    <div class="board-row-wrap">
+      <div style="width:20px"></div>
+      <div id="board"></div>
+      <div id="rank-labels" style="display:flex;flex-direction:column;"></div>
+    </div>
+    <div style="display:flex;">
+      <div style="width:22px"></div>
+      <div class="file-labels" id="file-labels"></div>
+      <div style="width:22px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Promotion modal -->
+<div id="promo-modal">
+  <div class="promo-box">
+    <h3>Choose Promotion</h3>
+    <div class="promo-choices" id="promo-choices"></div>
+  </div>
+</div>
+
+<!-- Dissolve modal -->
+<div id="dissolve-modal">
+  <div class="dissolve-box">
+    <h3>Move which piece?</h3>
+    <div class="dissolve-choices" id="dissolve-choices"></div>
+  </div>
+</div>
+
+<!-- Game over banner -->
+<div id="gameover-banner">
+  <div class="gameover-box">
+    <h2 id="gameover-title">Checkmate!</h2>
+    <p id="gameover-desc">White wins by checkmate.</p>
+    <button class="primary" onclick="newGame()">Play Again</button>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+//  PIECE DEFINITIONS
+// ═══════════════════════════════════════════════════════
+const PIECE_NAMES = { K:'King', Q:'Queen', R:'Rook', B:'Bishop', N:'Knight', P:'Pawn' };
+// Bishop treated as higher than Knight for tiebreak (both nominally 3)
+const PIECE_VALUES = { Q:9, R:5, B:3.1, N:3, P:1, K:0 };
+
+function color(p) { return p ? p[0] : null; }
+function type(p)  { return p ? p[1] : null; }
+function enemy(c) { return c === 'w' ? 'b' : 'w'; }
+
+const PIECE_DATA_URIS = {
+  wK: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0NSIgaGVpZ2h0PSI0NSI+CjxwYXRoIGQ9Ik0gMjIuNSwxMS42MyBMIDIyLjUsNiIgc3R5bGU9ImZpbGw6bm9uZTtzdHJva2U6IzAwMDAwMDtzdHJva2Utd2lkdGg6MS41O3N0cm9rZS1saW5lam9pbjpyb3VuZDsiLz4KPHBhdGggZD0iTSAyMCw4IEwgMjUsOCIgc3R5bGU9ImZpbGw6bm9uZTtzdHJva2U6IzAwMDAwMDtzdHJva2Utd2lkdGg6MS41O3N0cm9rZS1saW5lam9pbjpyb3VuZDsiLz4KPHBhdGggZD0iTSAyMi41LDI1IEMgMjIuNSwyNSAyNywxNy41IDI1LjUsMTQuNSBDIDI1LjUsMTQuNSAyNC41LDEyIDIyLjUsMTIgQyAyMC41LDEyIDE5LjUsMTQuNSAxOS41LDE0LjUgQyAxOCwxNy41IDIyLjUsMjUgMjIuNSwyNSIgc3R5bGU9ImZpbGw6I2ZmZmZmZjtzdHJva2U6IzAwMDAwMDtzdHJva2Utd2lkdGg6MS41O3N0cm9rZS1saW5lam9pbjpyb3VuZDsiLz4KPHBhdGggZD0iTSAxMi41LDM3IEMgMTgsNDAuNSAyNyw0MC41IDMyLjUsMzcgTCAzMi41LDMwIEMgMzIuNSwzMCA0MS41LDI1LjUgMzguNSwxOS41IEMgMzQuNSwxMyAyNSwxNiAyMi41LDIzLjUgTCAyMi41LDI3IEwgMjIuNSwyMy41IEMgMjAsMTYgMTAuNSwxMyA2LjUsMTkuNSBDIDMuNSwyNS41IDEyLjUsMzAgMTIuNSwzMCB6IiBzdHlsZT0iZmlsbDojZmZmZmZmO3N0cm9rZTojMDAwMDAwO3N0cm9rZS13aWR0aDoxLjU7c3Ryb2tlLWxpbmVqb2luOnJvdW5kOyIvPgo8cGF0aCBkPSJNIDEyLjUsMzAgQyAxOCwyNyAyNywyNyAzMi41LDMwIiBzdHlsZT0iZmlsbDpub25lO3N0cm9rZTojMDAwMDAwO3N0cm9rZS13aWR0aDoxLjU7Ii8+CjxwYXRoIGQ9Ik0gMTIuNSwzMy41IEMgMTgsMzAuNSAyNywzMC41IDMyLjUsMzMuNSIgc3R5bGU9ImZpbGw6bm9uZTtzdHJva2U6IzAwMDAwMDtzdHJva2Utd2lkdGg6MS41OyIvPgo8cGF0aCBkPSJNIDEyLjUsMzcgQyAxOCwzNCAyNywzNCAzMi41LDM3IiBzdHlsZT0iZmlsbDpub25lO3N0cm9rZTojMDAwMDAwO3N0cm9rZS13aWR0aDoxLjU7Ii8+Cjwvc3ZnPg==',
+  wQ: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0NSIgaGVpZ2h0PSI0NSI+CjxwYXRoIGQ9Ik0gOSwyNiBDIDE3LjUsMjQuNSAzMCwyNC41IDM2LDI2IEwgMzguNSwxMy41IEwgMzEsMjUgTCAzMC43LDEwLjkgTCAyNS41LDI0LjUgTCAyMi41LDEwIEwgMTkuNSwyNC41IEwgMTQuMywxMC45IEwgMTQsMjUgTCA2LjUsMTMuNSB6IiBzdHlsZT0iZmlsbDojZmZmZmZmO3N0cm9rZTojMDAwMDAwO3N0cm9rZS13aWR0aDoxLjU7c3Ryb2tlLWxpbmVqb2luOnJvdW5kOyIvPgo8cGF0aCBkPSJNIDksMjYgQyA5LDI4IDEwLjUsMjggMTEuNSwzMCBDIDEyLjUsMzEuNSAxMi41LDMxIDEyLDMzLjUgQyAxMC41LDM0LjUgMTEsMzYgMTEsMzYgQyA5LjUsMzcuNSAxMS41LDM4LjUgMTEuNSwzOC41IEMgMTcuNSwzOS41IDI3LjUsMzkuNSAzMy41LDM4LjUgQyAzMy41LDM4LjUgMzUuNSwzNy41IDM0LDM2IEMgMzQsMzYgMzQuNSwzNC41IDMzLDMzLjUgQyAzMi41LDMxIDMyLjUsMzEuNSAzMy41LDMwIEMgMzQuNSwyOCAzNiwyOCAzNiwyNiBDIDI3LjUsMjQuNSAxNy41LDI0LjUgOSwyNiB6IiBzdHlsZT0iZmlsbDojZmZmZmZmO3N0cm9rZTojMDAwMDAwO3N0cm9rZS13aWR0aDoxLjU7c3Ryb2tlLWxpbmVqb2luOnJvdW5kOyIvPgo8Y2lyY2xlIGN4PSI2IiBjeT0iMTIiIHI9IjIiIHN0eWxlPSJmaWxsOiNmZmZmZmY7c3Ryb2tlOiMwMDAwMDA7c3Ryb2tlLXdpZHRoOjEuNTsiLz4KPGNpcmNsZSBjeD0iMTQiIGN5PSI5IiByPSIyIiBzdHlsZT0iZmlsbDojZmZmZmZmO3N0cm9rZTojMDAwMDAwO3N0cm9rZS13aWR0aDoxLjU7Ii8+CjxjaXJjbGUgY3g9IjIyLjUiIGN5PSI4IiByPSIyIiBzdHlsZT0iZmlsbDojZmZmZmZmO3N0cm9rZTojMDAwMDAwO3N0cm9rZS13aWR0aDoxLjU7Ii8+CjxjaXJjbGUgY3g9IjMxIiBjeT0iOSIgcj0iMiIgc3R5bGU9ImZpbGw6I2ZmZmZmZjtzdHJva2U6IzAwMDAwMDtzdHJva2Utd2lkdGg6MS41OyIvPgo8Y2lyY2xlIGN4PSIzOSIgY3k9IjEyIiByPSIyIiBzdHlsZT0iZmlsbDojZmZmZmZmO3N0cm9rZTojMDAwMDAwO3N0cm9rZS13aWR0aDoxLjU7Ii8+CjxwYXRoIGQ9Ik0gOSwyNiBDIDE3LjUsMjQuNSAzMCwyNC41IDM2LDI2IE0gMTEuNSwzMCBDIDE1LDI5IDMwLDI5IDMzLjUsMzAgTSAxMiwzMy41IEMgMTUsMzIuNSAzMCwzMi41IDMzLDMzLjUiIHN0eWxlPSJmaWxsOm5vbmU7c3Ryb2tlOiMwMDAwMDA7c3Ryb2tlLXdpZHRoOjEuNTsiLz4KPC9zdmc+',
+  wR: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0NSIgaGVpZ2h0PSI0NSI+CjxwYXRoIGQ9Ik0gOSwzOSBMIDM2LDM5IEwgMzYsMzYgTCA5LDM2IHoiIHN0eWxlPSJmaWxsOiNmZmZmZmY7c3Ryb2tlOiMwMDAwMDA7c3Ryb2tlLXdpZHRoOjEuNTtzdHJva2UtbGluZWpvaW46cm91bmQ7Ii8+CjxwYXRoIGQ9Ik0gMTIsMzYgTCAxMiwzMiBMIDMzLDMyIEwgMzMsMzYgeiIgc3R5bGU9ImZpbGw6I2ZmZmZmZjtzdHJva2U6IzAwMDAwMDtzdHJva2Utd2lkdGg6MS41O3N0cm9rZS1saW5lam9pbjpyb3VuZDsiLz4KPHBhdGggZD0iTSAxMSwxNCBMIDExLDkgTCAxNSw5IEwgMTUsMTEgTCAyMCwxMSBMIDIwLDkgTCAyNSw5IEwgMjUsMTEgTCAzMCwxMSBMIDMwLDkgTCAzNCw5IEwgMzQsMTQiIHN0eWxlPSJmaWxsOiNmZmZmZmY7c3Ryb2tlOiMwMDAwMDA7c3Ryb2tlLXdpZHRoOjEuNTtzdHJva2UtbGluZWpvaW46cm91bmQ7Ii8+CjxwYXRoIGQ9Ik0gMzQsMTQgTCAzMSwxNyBMIDE0LDE3IEwgMTEsMTQgeiIgc3R5bGU9ImZpbGw6I2ZmZmZmZjtzdHJva2U6IzAwMDAwMDtzdHJva2Utd2lkdGg6MS41O3N0cm9rZS1saW5lam9pbjpyb3VuZDsiLz4KPHBhdGggZD0iTSAxMywzMS41IEwgMTMsMTcgTCAzMiwxNyBMIDMyLDMxLjUgeiIgc3R5bGU9ImZpbGw6I2ZmZmZmZjtzdHJva2U6IzAwMDAwMDtzdHJva2Utd2lkdGg6MS41O3N0cm9rZS1saW5lam9pbjpyb3VuZDsiLz4KPHBhdGggZD0iTSAxMSwxNCBMIDM0LDE0IiBzdHlsZT0iZmlsbDpub25lO3N0cm9rZTojMDAwMDAwO3N0cm9rZS13aWR0aDoxLjU7Ii8+Cjwvc3ZnPg==',
+  wB: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0NSIgaGVpZ2h0PSI0NSI+CjxwYXRoIGQ9Ik0gOSwzNiBDIDEyLjM5LDM1LjAzIDE5LjExLDM2LjQzIDIyLjUsMzQgQyAyNS44OSwzNi40MyAzMi42MSwzNS4wMyAzNiwzNiBDIDM2LDM2IDM3LjY1LDM2LjU0IDM5LDM4IEMgMzguMzIsMzguOTcgMzcuMzUsMzguOTkgMzYsMzguNSBDIDMyLjYxLDM3LjUzIDI1Ljg5LDM4Ljk2IDIyLjUsMzcuNSBDIDE5LjExLDM4Ljk2IDEyLjM5LDM3LjUzIDksMzguNSBDIDcuNjQ2LDM4Ljk5IDYuNjc3LDM4Ljk3IDYsMzggQyA3LjM1NCwzNi4wNiA5LDM2IDksMzYgeiIgc3R5bGU9ImZpbGw6I2ZmZmZmZjtzdHJva2U6IzAwMDAwMDtzdHJva2Utd2lkdGg6MS41O3N0cm9rZS1saW5lam9pbjpyb3VuZDsiLz4KPHBhdGggZD0iTSAxNSwzMiBDIDE3LjUsMzQuNSAyNy41LDM0LjUgMzAsMzIgQyAzMC41LDMwLjUgMzAsMzAgMzAsMzAgQyAzMCwyNy41IDI3LjUsMjYgMjcuNSwyNiBDIDMzLDI0LjUgMzMuNSwxNC41IDIyLjUsMTAuNSBDIDExLjUsMTQuNSAxMiwyNC41IDE3LjUsMjYgQyAxNy41LDI2IDE1LDI3LjUgMTUsMzAgQyAxNSwzMCAxNC41LDMwLjUgMTUsMzIgeiIgc3R5bGU9ImZpbGw6I2ZmZmZmZjtzdHJva2U6IzAwMDAwMDtzdHJva2Utd2lkdGg6MS41O3N0cm9rZS1saW5lam9pbjpyb3VuZDsiLz4KPHBhdGggZD0iTSAyNSw4IEEgMi41LDIuNSAwIDEgMSAyMCw4IEEgMi41LDIuNSAwIDEgMSAyNSw4IHoiIHN0eWxlPSJmaWxsOiNmZmZmZmY7c3Ryb2tlOiMwMDAwMDA7c3Ryb2tlLXdpZHRoOjEuNTsiLz4KPHBhdGggZD0iTSAxNy41LDI2IEwgMjcuNSwyNiBNIDE1LDMwIEwgMzAsMzAgTSAyMi41LDE1LjUgTCAyMi41LDIwLjUgTSAyMCwxOCBMIDI1LDE4IiBzdHlsZT0iZmlsbDpub25lO3N0cm9rZTojMDAwMDAwO3N0cm9rZS13aWR0aDoxLjU7Ii8+Cjwvc3ZnPg==',
+  wN: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0NSIgaGVpZ2h0PSI0NSI+CjxwYXRoIGQ9Ik0gMjIsMTAgQyAzMi41LDExIDM4LjUsMTggMzgsMzkgTCAxNSwzOSBDIDE1LDMwIDI1LDMyLjUgMjMsMTgiIHN0eWxlPSJmaWxsOiNmZmZmZmY7c3Ryb2tlOiMwMDAwMDA7c3Ryb2tlLXdpZHRoOjEuNTsiLz4KPHBhdGggZD0iTSAyNCwxOCBDIDI0LjM4LDIwLjkxIDE4LjQ1LDI1LjM3IDE2LDI3IEMgMTMsMjkgMTMuMTgsMzEuMzQgMTEsMzEgQyA5Ljk1OCwzMC4wNiAxMi40MSwyNy45NiAxMSwyOCBDIDEwLDI4IDExLjE5LDI5LjIzIDEwLDMwIEMgOSwzMCA1Ljk5NywzMSA2LDI2IEMgNiwyNCAxMiwxNCAxMiwxNCBDIDEyLDE0IDEzLjg5LDEyLjEgMTQsMTAuNSBDIDEzLjI3LDkuNTA2IDEzLjUsOC41IDEzLjUsNy41IEMgMTQuNSw2LjUgMTYuNSwxMCAxNi41LDEwIEwgMTguNSwxMCBDIDE4LjUsMTAgMTkuMjgsOC4wMDggMjEsNyBDIDIyLDcgMjIsMTAgMjIsMTAiIHN0eWxlPSJmaWxsOiNmZmZmZmY7c3Ryb2tlOiMwMDAwMDA7c3Ryb2tlLXdpZHRoOjEuNTsiLz4KPHBhdGggZD0iTSA5LjUsMjUuNSBBIDAuNSwwLjUgMCAxIDEgOC41LDI1LjUgQSAwLjUsMC41IDAgMSAxIDkuNSwyNS41IHoiIHN0eWxlPSJmaWxsOiMwMDAwMDA7c3Ryb2tlOiMwMDAwMDA7c3Ryb2tlLXdpZHRoOjEuNTsiLz4KPHBhdGggZD0iTSAxNSwxNS41IEEgMC41LDEuNSAwIDEgMSAxNCwxNS41IEEgMC41LDEuNSAwIDEgMSAxNSwxNS41IHoiIHN0eWxlPSJmaWxsOiMwMDAwMDA7c3Ryb2tlOiMwMDAwMDA7c3Ryb2tlLXdpZHRoOjEuNTsiIHRyYW5zZm9ybT0ibWF0cml4KDAuODY2LDAuNSwtMC41LDAuODY2LDkuNjkzLC01LjE3MykiLz4KPC9zdmc+',
+  wP: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0NSIgaGVpZ2h0PSI0NSI+CjxwYXRoIGQ9Ik0gMjIsOSBDIDE5Ljc5LDkgMTgsMTAuNzkgMTgsMTMgQyAxOCwxNS4yMSAxOS43OSwxNyAyMiwxNyBDIDI0LjIxLDE3IDI2LDE1LjIxIDI2LDEzIEMgMjYsMTAuNzkgMjQuMjEsOSAyMiw5IHoiIHN0eWxlPSJmaWxsOiNmZmZmZmY7c3Ryb2tlOiMwMDAwMDA7c3Ryb2tlLXdpZHRoOjEuNTsiLz4KPHBhdGggZD0iTSAxNSwzNSBMIDI5LDM1IEwgMjksMzEgTCAyNSwyNyBMIDI1LDIzIEMgMjcuNSwyMyAyOCwyMiAyOCwyMCBDIDI4LDE4IDI3LDE3IDI1LDE3IEwgMTksMTcgQyAxNywxNyAxNiwxOCAxNiwyMCBDIDE2LDIyIDE2LjUsMjMgMTksMjMgTCAxOSwyNyBMIDE1LDMxIHoiIHN0eWxlPSJmaWxsOiNmZmZmZmY7c3Ryb2tlOiMwMDAwMDA7c3Ryb2tlLXdpZHRoOjEuNTtzdHJva2UtbGluZWpvaW46cm91bmQ7Ii8+Cjwvc3ZnPg==',
+  bK: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0NSIgaGVpZ2h0PSI0NSI+CjxwYXRoIGQ9Ik0gMjIuNSwxMS42MyBMIDIyLjUsNiIgc3R5bGU9ImZpbGw6bm9uZTtzdHJva2U6I2ZmZmZmZjtzdHJva2Utd2lkdGg6MS41O3N0cm9rZS1saW5lam9pbjpyb3VuZDsiLz4KPHBhdGggZD0iTSAyMCw4IEwgMjUsOCIgc3R5bGU9ImZpbGw6bm9uZTtzdHJva2U6I2ZmZmZmZjtzdHJva2Utd2lkdGg6MS41O3N0cm9rZS1saW5lam9pbjpyb3VuZDsiLz4KPHBhdGggZD0iTSAyMi41LDI1IEMgMjIuNSwyNSAyNywxNy41IDI1LjUsMTQuNSBDIDI1LjUsMTQuNSAyNC41LDEyIDIyLjUsMTIgQyAyMC41LDEyIDE5LjUsMTQuNSAxOS41LDE0LjUgQyAxOCwxNy41IDIyLjUsMjUgMjIuNSwyNSIgc3R5bGU9ImZpbGw6IzAwMDAwMDtzdHJva2U6I2ZmZmZmZjtzdHJva2Utd2lkdGg6MS41O3N0cm9rZS1saW5lam9pbjpyb3VuZDsiLz4KPHBhdGggZD0iTSAxMi41LDM3IEMgMTgsNDAuNSAyNyw0MC41IDMyLjUsMzcgTCAzMi41LDMwIEMgMzIuNSwzMCA0MS41LDI1LjUgMzguNSwxOS41IEMgMzQuNSwxMyAyNSwxNiAyMi41LDIzLjUgTCAyMi41LDI3IEwgMjIuNSwyMy41IEMgMjAsMTYgMTAuNSwxMyA2LjUsMTkuNSBDIDMuNSwyNS41IDEyLjUsMzAgMTIuNSwzMCB6IiBzdHlsZT0iZmlsbDojMDAwMDAwO3N0cm9rZTojZmZmZmZmO3N0cm9rZS13aWR0aDoxLjU7c3Ryb2tlLWxpbmVqb2luOnJvdW5kOyIvPgo8cGF0aCBkPSJNIDEyLjUsMzAgQyAxOCwyNyAyNywyNyAzMi41LDMwIiBzdHlsZT0iZmlsbDpub25lO3N0cm9rZTojZmZmZmZmO3N0cm9rZS13aWR0aDoxLjU7Ii8+CjxwYXRoIGQ9Ik0gMTIuNSwzMy41IEMgMTgsMzAuNSAyNywzMC41IDMyLjUsMzMuNSIgc3R5bGU9ImZpbGw6bm9uZTtzdHJva2U6I2ZmZmZmZjtzdHJva2Utd2lkdGg6MS41OyIvPgo8cGF0aCBkPSJNIDEyLjUsMzcgQyAxOCwzNCAyNywzNCAzMi41LDM3IiBzdHlsZT0iZmlsbDpub25lO3N0cm9rZTojZmZmZmZmO3N0cm9rZS13aWR0aDoxLjU7Ii8+Cjwvc3ZnPg==',
+  bQ: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0NSIgaGVpZ2h0PSI0NSI+CjxwYXRoIGQ9Ik0gOSwyNiBDIDE3LjUsMjQuNSAzMCwyNC41IDM2LDI2IEwgMzguNSwxMy41IEwgMzEsMjUgTCAzMC43LDEwLjkgTCAyNS41LDI0LjUgTCAyMi41LDEwIEwgMTkuNSwyNC41IEwgMTQuMywxMC45IEwgMTQsMjUgTCA2LjUsMTMuNSB6IiBzdHlsZT0iZmlsbDojMDAwMDAwO3N0cm9rZTojZmZmZmZmO3N0cm9rZS13aWR0aDoxLjU7c3Ryb2tlLWxpbmVqb2luOnJvdW5kOyIvPgo8cGF0aCBkPSJNIDksMjYgQyA5LDI4IDEwLjUsMjggMTEuNSwzMCBDIDEyLjUsMzEuNSAxMi41LDMxIDEyLDMzLjUgQyAxMC41LDM0LjUgMTEsMzYgMTEsMzYgQyA5LjUsMzcuNSAxMS41LDM4LjUgMTEuNSwzOC41IEMgMTcuNSwzOS41IDI3LjUsMzkuNSAzMy41LDM4LjUgQyAzMy41LDM4LjUgMzUuNSwzNy41IDM0LDM2IEMgMzQsMzYgMzQuNSwzNC41IDMzLDMzLjUgQyAzMi41LDMxIDMyLjUsMzEuNSAzMy41LDMwIEMgMzQuNSwyOCAzNiwyOCAzNiwyNiBDIDI3LjUsMjQuNSAxNy41LDI0LjUgOSwyNiB6IiBzdHlsZT0iZmlsbDojMDAwMDAwO3N0cm9rZTojZmZmZmZmO3N0cm9rZS13aWR0aDoxLjU7c3Ryb2tlLWxpbmVqb2luOnJvdW5kOyIvPgo8Y2lyY2xlIGN4PSI2IiBjeT0iMTIiIHI9IjIiIHN0eWxlPSJmaWxsOiMwMDAwMDA7c3Ryb2tlOiNmZmZmZmY7c3Ryb2tlLXdpZHRoOjEuNTsiLz4KPGNpcmNsZSBjeD0iMTQiIGN5PSI5IiByPSIyIiBzdHlsZT0iZmlsbDojMDAwMDAwO3N0cm9rZTojZmZmZmZmO3N0cm9rZS13aWR0aDoxLjU7Ii8+CjxjaXJjbGUgY3g9IjIyLjUiIGN5PSI4IiByPSIyIiBzdHlsZT0iZmlsbDojMDAwMDAwO3N0cm9rZTojZmZmZmZmO3N0cm9rZS13aWR0aDoxLjU7Ii8+CjxjaXJjbGUgY3g9IjMxIiBjeT0iOSIgcj0iMiIgc3R5bGU9ImZpbGw6IzAwMDAwMDtzdHJva2U6I2ZmZmZmZjtzdHJva2Utd2lkdGg6MS41OyIvPgo8Y2lyY2xlIGN4PSIzOSIgY3k9IjEyIiByPSIyIiBzdHlsZT0iZmlsbDojMDAwMDAwO3N0cm9rZTojZmZmZmZmO3N0cm9rZS13aWR0aDoxLjU7Ii8+CjxwYXRoIGQ9Ik0gOSwyNiBDIDE3LjUsMjQuNSAzMCwyNC41IDM2LDI2IE0gMTEuNSwzMCBDIDE1LDI5IDMwLDI5IDMzLjUsMzAgTSAxMiwzMy41IEMgMTUsMzIuNSAzMCwzMi41IDMzLDMzLjUiIHN0eWxlPSJmaWxsOm5vbmU7c3Ryb2tlOiNmZmZmZmY7c3Ryb2tlLXdpZHRoOjEuNTsiLz4KPC9zdmc+',
+  bR: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0NSIgaGVpZ2h0PSI0NSI+CjxwYXRoIGQ9Ik0gOSwzOSBMIDM2LDM5IEwgMzYsMzYgTCA5LDM2IHoiIHN0eWxlPSJmaWxsOiMwMDAwMDA7c3Ryb2tlOiNmZmZmZmY7c3Ryb2tlLXdpZHRoOjEuNTtzdHJva2UtbGluZWpvaW46cm91bmQ7Ii8+CjxwYXRoIGQ9Ik0gMTIsMzYgTCAxMiwzMiBMIDMzLDMyIEwgMzMsMzYgeiIgc3R5bGU9ImZpbGw6IzAwMDAwMDtzdHJva2U6I2ZmZmZmZjtzdHJva2Utd2lkdGg6MS41O3N0cm9rZS1saW5lam9pbjpyb3VuZDsiLz4KPHBhdGggZD0iTSAxMSwxNCBMIDExLDkgTCAxNSw5IEwgMTUsMTEgTCAyMCwxMSBMIDIwLDkgTCAyNSw5IEwgMjUsMTEgTCAzMCwxMSBMIDMwLDkgTCAzNCw5IEwgMzQsMTQiIHN0eWxlPSJmaWxsOiMwMDAwMDA7c3Ryb2tlOiNmZmZmZmY7c3Ryb2tlLXdpZHRoOjEuNTtzdHJva2UtbGluZWpvaW46cm91bmQ7Ii8+CjxwYXRoIGQ9Ik0gMzQsMTQgTCAzMSwxNyBMIDE0LDE3IEwgMTEsMTQgeiIgc3R5bGU9ImZpbGw6IzAwMDAwMDtzdHJva2U6I2ZmZmZmZjtzdHJva2Utd2lkdGg6MS41O3N0cm9rZS1saW5lam9pbjpyb3VuZDsiLz4KPHBhdGggZD0iTSAxMywzMS41IEwgMTMsMTcgTCAzMiwxNyBMIDMyLDMxLjUgeiIgc3R5bGU9ImZpbGw6IzAwMDAwMDtzdHJva2U6I2ZmZmZmZjtzdHJva2Utd2lkdGg6MS41O3N0cm9rZS1saW5lam9pbjpyb3VuZDsiLz4KPHBhdGggZD0iTSAxMSwxNCBMIDM0LDE0IiBzdHlsZT0iZmlsbDpub25lO3N0cm9rZTojZmZmZmZmO3N0cm9rZS13aWR0aDoxLjU7Ii8+Cjwvc3ZnPg==',
+  bB: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0NSIgaGVpZ2h0PSI0NSI+CjxwYXRoIGQ9Ik0gOSwzNiBDIDEyLjM5LDM1LjAzIDE5LjExLDM2LjQzIDIyLjUsMzQgQyAyNS44OSwzNi40MyAzMi42MSwzNS4wMyAzNiwzNiBDIDM2LDM2IDM3LjY1LDM2LjU0IDM5LDM4IEMgMzguMzIsMzguOTcgMzcuMzUsMzguOTkgMzYsMzguNSBDIDMyLjYxLDM3LjUzIDI1Ljg5LDM4Ljk2IDIyLjUsMzcuNSBDIDE5LjExLDM4Ljk2IDEyLjM5LDM3LjUzIDksMzguNSBDIDcuNjQ2LDM4Ljk5IDYuNjc3LDM4Ljk3IDYsMzggQyA3LjM1NCwzNi4wNiA5LDM2IDksMzYgeiIgc3R5bGU9ImZpbGw6IzAwMDAwMDtzdHJva2U6I2ZmZmZmZjtzdHJva2Utd2lkdGg6MS41O3N0cm9rZS1saW5lam9pbjpyb3VuZDsiLz4KPHBhdGggZD0iTSAxNSwzMiBDIDE3LjUsMzQuNSAyNy41LDM0LjUgMzAsMzIgQyAzMC41LDMwLjUgMzAsMzAgMzAsMzAgQyAzMCwyNy41IDI3LjUsMjYgMjcuNSwyNiBDIDMzLDI0LjUgMzMuNSwxNC41IDIyLjUsMTAuNSBDIDExLjUsMTQuNSAxMiwyNC41IDE3LjUsMjYgQyAxNy41LDI2IDE1LDI3LjUgMTUsMzAgQyAxNSwzMCAxNC41LDMwLjUgMTUsMzIgeiIgc3R5bGU9ImZpbGw6IzAwMDAwMDtzdHJva2U6I2ZmZmZmZjtzdHJva2Utd2lkdGg6MS41O3N0cm9rZS1saW5lam9pbjpyb3VuZDsiLz4KPHBhdGggZD0iTSAyNSw4IEEgMi41LDIuNSAwIDEgMSAyMCw4IEEgMi41LDIuNSAwIDEgMSAyNSw4IHoiIHN0eWxlPSJmaWxsOiMwMDAwMDA7c3Ryb2tlOiNmZmZmZmY7c3Ryb2tlLXdpZHRoOjEuNTsiLz4KPHBhdGggZD0iTSAxNy41LDI2IEwgMjcuNSwyNiBNIDE1LDMwIEwgMzAsMzAgTSAyMi41LDE1LjUgTCAyMi41LDIwLjUgTSAyMCwxOCBMIDI1LDE4IiBzdHlsZT0iZmlsbDpub25lO3N0cm9rZTojZmZmZmZmO3N0cm9rZS13aWR0aDoxLjU7Ii8+Cjwvc3ZnPg==',
+  bN: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0NSIgaGVpZ2h0PSI0NSI+CjxwYXRoIGQ9Ik0gMjIsMTAgQyAzMi41LDExIDM4LjUsMTggMzgsMzkgTCAxNSwzOSBDIDE1LDMwIDI1LDMyLjUgMjMsMTgiIHN0eWxlPSJmaWxsOiMwMDAwMDA7c3Ryb2tlOiNmZmZmZmY7c3Ryb2tlLXdpZHRoOjEuNTsiLz4KPHBhdGggZD0iTSAyNCwxOCBDIDI0LjM4LDIwLjkxIDE4LjQ1LDI1LjM3IDE2LDI3IEMgMTMsMjkgMTMuMTgsMzEuMzQgMTEsMzEgQyA5Ljk1OCwzMC4wNiAxMi40MSwyNy45NiAxMSwyOCBDIDEwLDI4IDExLjE5LDI5LjIzIDEwLDMwIEMgOSwzMCA1Ljk5NywzMSA2LDI2IEMgNiwyNCAxMiwxNCAxMiwxNCBDIDEyLDE0IDEzLjg5LDEyLjEgMTQsMTAuNSBDIDEzLjI3LDkuNTA2IDEzLjUsOC41IDEzLjUsNy41IEMgMTQuNSw2LjUgMTYuNSwxMCAxNi41LDEwIEwgMTguNSwxMCBDIDE4LjUsMTAgMTkuMjgsOC4wMDggMjEsNyBDIDIyLDcgMjIsMTAgMjIsMTAiIHN0eWxlPSJmaWxsOiMwMDAwMDA7c3Ryb2tlOiNmZmZmZmY7c3Ryb2tlLXdpZHRoOjEuNTsiLz4KPHBhdGggZD0iTSA5LjUsMjUuNSBBIDAuNSwwLjUgMCAxIDEgOC41LDI1LjUgQSAwLjUsMC41IDAgMSAxIDkuNSwyNS41IHoiIHN0eWxlPSJmaWxsOiNmZmZmZmY7c3Ryb2tlOiNmZmZmZmY7c3Ryb2tlLXdpZHRoOjEuNTsiLz4KPHBhdGggZD0iTSAxNSwxNS41IEEgMC41LDEuNSAwIDEgMSAxNCwxNS41IEEgMC41LDEuNSAwIDEgMSAxNSwxNS41IHoiIHN0eWxlPSJmaWxsOiNmZmZmZmY7c3Ryb2tlOiNmZmZmZmY7c3Ryb2tlLXdpZHRoOjEuNTsiIHRyYW5zZm9ybT0ibWF0cml4KDAuODY2LDAuNSwtMC41LDAuODY2LDkuNjkzLC01LjE3MykiLz4KPC9zdmc+',
+  bP: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0NSIgaGVpZ2h0PSI0NSI+CjxwYXRoIGQ9Ik0gMjIsOSBDIDE5Ljc5LDkgMTgsMTAuNzkgMTgsMTMgQyAxOCwxNS4yMSAxOS43OSwxNyAyMiwxNyBDIDI0LjIxLDE3IDI2LDE1LjIxIDI2LDEzIEMgMjYsMTAuNzkgMjQuMjEsOSAyMiw5IHoiIHN0eWxlPSJmaWxsOiMwMDAwMDA7c3Ryb2tlOiNmZmZmZmY7c3Ryb2tlLXdpZHRoOjEuNTsiLz4KPHBhdGggZD0iTSAxNSwzNSBMIDI5LDM1IEwgMjksMzEgTCAyNSwyNyBMIDI1LDIzIEMgMjcuNSwyMyAyOCwyMiAyOCwyMCBDIDI4LDE4IDI3LDE3IDI1LDE3IEwgMTksMTcgQyAxNywxNyAxNiwxOCAxNiwyMCBDIDE2LDIyIDE2LjUsMjMgMTksMjMgTCAxOSwyNyBMIDE1LDMxIHoiIHN0eWxlPSJmaWxsOiMwMDAwMDA7c3Ryb2tlOiNmZmZmZmY7c3Ryb2tlLXdpZHRoOjEuNTtzdHJva2UtbGluZWpvaW46cm91bmQ7Ii8+Cjwvc3ZnPg==',
+};
+
+function pieceImgSrc(p) {
+  if (!p) return null;
+  return PIECE_DATA_URIS[p] || null;
+}
+
+// Returns an <img> element for a piece at `size` px
+function pieceImg(p, size) {
+  const img = document.createElement('img');
+  img.src = pieceImgSrc(p);
+  img.width = size;
+  img.height = size;
+  img.style.cssText = 'pointer-events:none;display:block;';
+  img.draggable = false;
+  return img;
+}
+
+// Unicode glyphs used only in non-board UI (captured list, modal buttons)
+const PIECE_GLYPHS = {
+  wK:'♔', wQ:'♕', wR:'♖', wB:'♗', wN:'♘', wP:'♙',
+  bK:'♚', bQ:'♛', bR:'♜', bB:'♝', bN:'♞', bP:'♟'
+};
+function pieceGlyph(p) { return p ? PIECE_GLYPHS[p] : ''; }
+
+// Sort combo pieces: higher value -> index 0 (lower-left), lower value -> index 1 (upper-right)
+function sortComboPieces(pieces) {
+  const [a, b] = pieces;
+  const va = PIECE_VALUES[type(a)] ?? 0;
+  const vb = PIECE_VALUES[type(b)] ?? 0;
+  return va >= vb ? [a, b] : [b, a];
+}
+
+// ═══════════════════════════════════════════════════════
+//  GAME STATE
+// ═══════════════════════════════════════════════════════
+let G; // global game state
+let history = []; // stack of saved states for undo
+
+function initBoard() {
+  return [
+    ['bR','bN','bB','bQ','bK','bB','bN','bR'],
+    ['bP','bP','bP','bP','bP','bP','bP','bP'],
+    [null,null,null,null,null,null,null,null],
+    [null,null,null,null,null,null,null,null],
+    [null,null,null,null,null,null,null,null],
+    [null,null,null,null,null,null,null,null],
+    ['wP','wP','wP','wP','wP','wP','wP','wP'],
+    ['wR','wN','wB','wQ','wK','wB','wN','wR'],
+  ];
+}
+
+function newGame() {
+  G = {
+    board: initBoard(),
+    turn: 'w',
+    // combo[color] = {row, col, pieces:[p1, p2]} or null
+    combo: { w: null, b: null },
+    // castling rights
+    castling: { wK: true, wQ: true, bK: true, bQ: true },
+    // en passant target square (row,col) or null
+    enPassant: null,
+    // selected square
+    selected: null,
+    // valid moves for selected piece
+    validMoves: [],
+    // last move for highlighting
+    lastMove: null,
+    // captured pieces
+    captured: { w: [], b: [] },
+    // move log entries
+    moves: [],
+    // game over
+    gameOver: false,
+    // pending promotion
+    pendingPromo: null,
+    // pending dissolve (when clicking a combo piece to move one piece out)
+    pendingDissolve: null,
+    // queen count for promo cap
+    queenCount: { w: 1, b: 1 },
+  };
+  history = [];
+  closeAllModals();
+  renderBoard();
+  updateUI();
+  setMessage('Game started. White to move.');
+}
+
+// ═══════════════════════════════════════════════════════
+//  BOARD UTILITIES
+// ═══════════════════════════════════════════════════════
+function inBounds(r, c) { return r >= 0 && r <= 7 && c >= 0 && c <= 7; }
+
+function getPiece(board, r, c) {
+  if (!inBounds(r, c)) return null;
+  return board[r][c];
+}
+
+function setPiece(board, r, c, p) { board[r][c] = p; }
+
+function cloneBoard(board) { return board.map(r => [...r]); }
+
+function cloneState(g) {
+  return JSON.parse(JSON.stringify(g));
+}
+
+// Is this square occupied by a combo piece?
+function isComboSquare(g, r, c) {
+  for (const col of ['w', 'b']) {
+    if (g.combo[col] && g.combo[col].row === r && g.combo[col].col === c) return col;
+  }
+  return null;
+}
+
+function getComboFor(g, color) { return g.combo[color]; }
+
+// ═══════════════════════════════════════════════════════
+//  MOVE GENERATION
+// ═══════════════════════════════════════════════════════
+
+// Returns list of {r,c} pseudo-legal squares reachable by piece type t from (fr,fc)
+// Does NOT check for leaving king in check.
+function rawMoves(board, combos, fr, fc, t, c, enPassant, castling) {
+  const moves = [];
+  const opp = enemy(c);
+  const add = (r, cc, extra) => {
+    if (!inBounds(r, cc)) return;
+    moves.push({ r, c: cc, ...extra });
+  };
+  const slide = (dr, dc) => {
+    let r = fr + dr, cc = fc + dc;
+    while (inBounds(r, cc)) {
+      const target = getPiece(board, r, cc);
+      if (target) {
+        if (color(target) === opp) add(r, cc, { capture: true });
+        break;
+      }
+      add(r, cc, {});
+      r += dr; cc += dc;
+    }
+  };
+
+  switch (t) {
+    case 'P': {
+      const dir = c === 'w' ? -1 : 1;
+      const startRank = c === 'w' ? 6 : 1;
+      const minRank = c === 'w' ? 1 : 0; // pawns not allowed on own first rank
+      // forward
+      if (inBounds(fr + dir, fc) && !getPiece(board, fr + dir, fc)) {
+        if (fr + dir !== (c === 'w' ? 7 : 0)) { // not going backward off board weirdly
+          add(fr + dir, fc, {});
+          // double push
+          if (fr === startRank && !getPiece(board, fr + 2 * dir, fc)) {
+            add(fr + 2 * dir, fc, { doublePush: true });
+          }
+        }
+      }
+      // captures
+      for (const dc of [-1, 1]) {
+        const tr = fr + dir, tc = fc + dc;
+        if (!inBounds(tr, tc)) continue;
+        const target = getPiece(board, tr, tc);
+        if (target && color(target) === opp) add(tr, tc, { capture: true });
+        // en passant
+        if (enPassant && enPassant.r === tr && enPassant.c === tc) {
+          add(tr, tc, { enPassant: true, capture: true });
+        }
+      }
+      break;
+    }
+    case 'N': {
+      for (const [dr, dc] of [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]]) {
+        const tr = fr + dr, tc = fc + dc;
+        if (!inBounds(tr, tc)) continue;
+        const target = getPiece(board, tr, tc);
+        if (!target) add(tr, tc, {});
+        else if (color(target) === opp) add(tr, tc, { capture: true });
+      }
+      break;
+    }
+    case 'B': { [-1,-1,-1,1,1,-1,1,1].reduce((_, v, i, a) => i%2 ? slide(a[i-1], v) : null, null); slide(-1,-1); slide(-1,1); slide(1,-1); slide(1,1); break; }
+    case 'R': { slide(-1,0); slide(1,0); slide(0,-1); slide(0,1); break; }
+    case 'Q': { slide(-1,-1); slide(-1,1); slide(1,-1); slide(1,1); slide(-1,0); slide(1,0); slide(0,-1); slide(0,1); break; }
+    case 'K': {
+      for (const [dr, dc] of [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]) {
+        const tr = fr + dr, tc = fc + dc;
+        if (!inBounds(tr, tc)) continue;
+        const target = getPiece(board, tr, tc);
+        if (!target) add(tr, tc, {});
+        else if (color(target) === opp) add(tr, tc, { capture: true });
+      }
+      // Castling
+      if (c === 'w' && fr === 7 && fc === 4) {
+        if (castling.wK && !board[7][5] && !board[7][6]) {
+          add(7, 6, { castle: 'K' });
+        }
+        if (castling.wQ && !board[7][3] && !board[7][2] && !board[7][1]) {
+          add(7, 2, { castle: 'Q' });
+        }
+      }
+      if (c === 'b' && fr === 0 && fc === 4) {
+        if (castling.bK && !board[0][5] && !board[0][6]) {
+          add(0, 6, { castle: 'K' });
+        }
+        if (castling.bQ && !board[0][3] && !board[0][2] && !board[0][1]) {
+          add(0, 2, { castle: 'Q' });
+        }
+      }
+      break;
+    }
+  }
+  return moves;
+}
+
+// For a combo piece, combine moves of both piece types
+// Also includes moves to friendly non-combo squares (to create a new combo if no current combo)
+// and moves that dissolve the combo.
+function comboRawMoves(board, g, fr, fc, pieces, c, enPassant, castling) {
+  const allMoves = new Map(); // key="r,c" -> move obj
+  const opp = enemy(c);
+
+  for (const p of pieces) {
+    const t = type(p);
+    const ms = rawMoves(board, g.combo, fr, fc, t, c, enPassant, castling);
+    for (const m of ms) {
+      const key = `${m.r},${m.c}`;
+      if (!allMoves.has(key)) allMoves.set(key, m);
+    }
+  }
+
+  // Remove moves that land on own pieces UNLESS that square is empty (for dissolve - handled separately)
+  const result = [];
+  for (const [, m] of allMoves) {
+    const target = getPiece(board, m.r, m.c);
+    if (target && color(target) === c) continue; // can't land on own piece normally from combo
+    result.push(m);
+  }
+  return result;
+}
+
+// Find king position
+function findKing(board, c) {
+  for (let r = 0; r < 8; r++)
+    for (let cc = 0; cc < 8; cc++)
+      if (board[r][cc] === c + 'K') return [r, cc];
+  return null;
+}
+
+// Is square (r,c) attacked by color c?
+function isAttacked(board, r, c, byColor, g) {
+  for (let fr = 0; fr < 8; fr++) {
+    for (let fc = 0; fc < 8; fc++) {
+      const p = board[fr][fc];
+      if (!p || color(p) !== byColor) continue;
+
+      // Determine which piece types to check — if this is a combo square,
+      // check both sub-pieces; otherwise just the one on the board.
+      const typesToCheck = [];
+      if (g) {
+        const comboCol = isComboSquare(g, fr, fc);
+        if (comboCol === byColor) {
+          for (const cp of g.combo[byColor].pieces) typesToCheck.push(type(cp));
+        }
+      }
+      if (typesToCheck.length === 0) typesToCheck.push(type(p));
+
+      for (const t of typesToCheck) {
+        const attacks = rawMoves(board, { combo: { w: null, b: null } }, fr, fc, t, byColor, null, { wK: false, wQ: false, bK: false, bQ: false });
+        if (attacks.some(m => m.r === r && m.c === c)) return true;
+      }
+    }
+  }
+  return false;
+}
+
+function isInCheck(board, c, g) {
+  const king = findKing(board, c);
+  if (!king) return false;
+  return isAttacked(board, king[0], king[1], enemy(c), g);
+}
+
+// Apply a move to a board copy and return new board (for check testing)
+function applyMoveToBoard(board, g, fr, fc, tr, tc, extra) {
+  const nb = cloneBoard(board);
+  const piece = nb[fr][fc];
+  nb[tr][tc] = piece;
+  nb[fr][fc] = null;
+
+  // En passant capture
+  if (extra && extra.enPassant) {
+    const dir = color(piece) === 'w' ? 1 : -1;
+    nb[tr + dir][tc] = null;
+  }
+  // Castling rook move
+  if (extra && extra.castle) {
+    const row = fr;
+    if (extra.castle === 'K') { nb[row][5] = nb[row][7]; nb[row][7] = null; }
+    else { nb[row][3] = nb[row][0]; nb[row][0] = null; }
+  }
+  return nb;
+}
+
+// Legal moves: filter raw moves that don't leave own king in check
+function legalMoves(g, fr, fc) {
+  const board = g.board;
+  const p = board[fr][fc];
+  if (!p) return [];
+  const c = color(p);
+  const t = type(p);
+  const comboInfo = g.combo[c];
+  const isOnCombo = comboInfo && comboInfo.row === fr && comboInfo.col === fc;
+
+  let raws;
+  if (isOnCombo) {
+    raws = comboRawMoves(board, g, fr, fc, comboInfo.pieces, c, g.enPassant, g.castling);
+  } else {
+    raws = rawMoves(board, g.combo, fr, fc, t, c, g.enPassant, g.castling);
+  }
+
+  // Also: moving to a friendly (non-king, non-already-combo) square creates a combo,
+  // but ONLY if the piece can actually reach that square by its normal movement rules.
+  // We check this by temporarily treating the target as empty and seeing if rawMoves
+  // includes it, OR by treating it as an enemy and checking for a capture move.
+  if (t !== 'K') {
+    // Build a board copy where friendly pieces are treated as empty, so rawMoves
+    // can reach squares currently occupied by friendlies.
+    const boardForMerge = cloneBoard(board);
+    for (let r = 0; r < 8; r++) {
+      for (let cc = 0; cc < 8; cc++) {
+        if (r === fr && cc === fc) continue;
+        const target = board[r][cc];
+        if (target && color(target) === c) boardForMerge[r][cc] = null;
+      }
+    }
+    const movingType = isOnCombo ? null : t;
+    const reachable = isOnCombo
+      ? comboRawMoves(boardForMerge, g, fr, fc, comboInfo.pieces, c, g.enPassant, g.castling)
+      : rawMoves(boardForMerge, g.combo, fr, fc, t, c, g.enPassant, g.castling);
+    const reachableSet = new Set(reachable.map(m => `${m.r},${m.c}`));
+
+    for (let r = 0; r < 8; r++) {
+      for (let cc = 0; cc < 8; cc++) {
+        if (r === fr && cc === fc) continue;
+        const target = board[r][cc];
+        if (!target || color(target) !== c) continue;
+        if (type(target) === 'K') continue;
+        const targetCombo = isComboSquare(g, r, cc);
+        if (targetCombo === c) continue;
+        if (comboInfo && !(comboInfo.row === fr && comboInfo.col === fc)) continue;
+        // Only add merge if the piece can actually reach this square
+        if (!reachableSet.has(`${r},${cc}`)) continue;
+        // If the moving piece is itself a combo, add as a plain move (no merge flag) —
+        // executeMove handles it as dissolve-and-remerge via the isComboSq branch.
+        // If not a combo, mark as merge so applyMove creates the new combo.
+        raws.push(isOnCombo ? { r, c: cc } : { r, c: cc, merge: true });
+      }
+    }
+  }
+
+  // Filter for legality
+  return raws.filter(m => {
+    // Simulate and check king safety
+    const nb = applyMoveToBoard(board, g, fr, fc, m.r, m.c, m);
+    return !isInCheck(nb, c, g);
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  MOVE APPLICATION
+// ═══════════════════════════════════════════════════════
+
+function applyMove(g, fr, fc, tr, tc, extra, promoChoice) {
+  const ng = cloneState(g);
+  const board = ng.board;
+  const movingPiece = board[fr][fc];
+  const c = color(movingPiece);
+  const t = type(movingPiece);
+  const opp = enemy(c);
+  const comboInfo = ng.combo[c];
+  const isOnCombo = comboInfo && comboInfo.row === fr && comboInfo.col === fc;
+
+  let moveNotation = '';
+  let capturedPiece = null;
+
+  // Determine if this is a merge move
+  if (extra && extra.merge) {
+    // Create combo: movingPiece moves onto targetPiece's square
+    const targetPiece = board[tr][tc];
+    // If we currently have a combo, dissolve it first (the piece we're moving IS from the combo or standalone)
+    if (comboInfo) {
+      // Dissolving old combo by moving one piece away - already handled by selecting which piece moves
+      // Remove old combo
+      ng.combo[c] = null;
+    }
+    board[fr][fc] = null;
+    // targetPiece stays; board[tr][tc] already has it
+    // Combo: both pieces on (tr,tc)
+    ng.combo[c] = { row: tr, col: tc, pieces: [targetPiece, movingPiece] };
+    // board square still shows "movingPiece" for color/ownership detection
+    board[tr][tc] = movingPiece; // just mark color; visual handled separately
+    moveNotation = pieceToLetter(movingPiece) + squareName(tr, tc) + '(2)';
+  } else if (isOnCombo && extra && extra.dissolveMoving) {
+    // Moving one piece out of the combo
+    const movingFromCombo = extra.dissolveMoving; // the piece being moved
+    const staying = comboInfo.pieces.find(p => p !== movingFromCombo);
+    board[fr][fc] = staying; // leave the other piece
+    ng.combo[c] = null;
+    // Now move the dissolveMoving piece to target
+    const targetPiece = board[tr][tc];
+    if (targetPiece && color(targetPiece) === opp) {
+      capturedPiece = targetPiece;
+      ng.captured[c].push(targetPiece);
+    } else if (targetPiece && color(targetPiece) === c) {
+      // merge with another friendly piece
+      if (type(targetPiece) !== 'K') {
+        ng.combo[c] = { row: tr, col: tc, pieces: [targetPiece, movingFromCombo] };
+      }
+    }
+    board[tr][tc] = movingFromCombo;
+
+    // Handle pawn promotion after dissolve
+    const movingT = type(movingFromCombo);
+    if (movingT === 'P') {
+      const promRank = c === 'w' ? 0 : 7;
+      if (tr === promRank) {
+        board[tr][tc] = c + (promoChoice || 'Q');
+        if (ng.combo[c] && ng.combo[c].row === tr && ng.combo[c].col === tc) {
+          ng.combo[c].pieces = ng.combo[c].pieces.map(p => p === movingFromCombo ? c + (promoChoice || 'Q') : p);
+        }
+      }
+    }
+    moveNotation = pieceToLetter(movingFromCombo) + squareName(tr, tc);
+  } else {
+    // Normal move (piece or combo piece as unit)
+    const targetPiece = board[tr][tc];
+
+    if (targetPiece && color(targetPiece) === opp) {
+      capturedPiece = targetPiece;
+      ng.captured[c].push(targetPiece);
+      // If capturing an enemy combo piece, both pieces lost - already handled since board[tr][tc] is one piece; the other is tracked in combo
+      const enemyCombo = ng.combo[opp];
+      if (enemyCombo && enemyCombo.row === tr && enemyCombo.col === tc) {
+        // Both enemy pieces captured
+        ng.captured[c].push(...enemyCombo.pieces.filter(p => p !== targetPiece));
+        ng.combo[opp] = null;
+      }
+    }
+
+    // En passant
+    if (extra && extra.enPassant) {
+      const dir = c === 'w' ? 1 : -1;
+      const epRow = tr + dir;
+      capturedPiece = board[epRow][tc];
+      ng.captured[c].push(capturedPiece);
+      board[epRow][tc] = null;
+      // If the captured pawn was part of a combo, both pieces are lost
+      const epCombo = ng.combo[opp];
+      if (epCombo && epCombo.row === epRow && epCombo.col === tc) {
+        ng.captured[c].push(...epCombo.pieces.filter(p => p !== capturedPiece));
+        ng.combo[opp] = null;
+      }
+    }
+
+    // If moving combo piece as unit
+    if (isOnCombo) {
+      ng.combo[c] = { row: tr, col: tc, pieces: [...comboInfo.pieces] };
+    } else if (comboInfo) {
+      // Not moving the combo piece; combo stays
+    }
+
+    // Castling
+    if (extra && extra.castle) {
+      const row = fr;
+      const rookFromCol = extra.castle === 'K' ? 7 : 0;
+      const rookToCol   = extra.castle === 'K' ? 5 : 3;
+      const rookPiece   = board[row][rookFromCol];
+      const rookCombo   = ng.combo[c];
+      const rookIsCombo = rookCombo && rookCombo.row === row && rookCombo.col === rookFromCol;
+
+      if (rookIsCombo) {
+        if (extra.castleRookDissolve) {
+          // Only the rook moves; the other piece stays on the corner square.
+          const otherPiece = rookCombo.pieces.find(p => type(p) !== 'R');
+          board[row][rookToCol] = c + 'R';
+          board[row][rookFromCol] = otherPiece || null;
+          ng.combo[c] = null;
+        } else {
+          // Move as unit (default / castleRookAsUnit): both pieces move to rookToCol.
+          board[row][rookToCol] = rookPiece;
+          board[row][rookFromCol] = null;
+          ng.combo[c] = { ...rookCombo, row: row, col: rookToCol };
+        }
+      } else {
+        // Normal rook — just move it.
+        board[row][rookToCol] = board[row][rookFromCol];
+        board[row][rookFromCol] = null;
+      }
+    }
+
+    board[tr][tc] = movingPiece;
+    board[fr][fc] = null;
+
+    // Pawn promotion (non-combo, or combo-as-unit with pawn)
+    const promRank = c === 'w' ? 0 : 7;
+    if (tr === promRank) {
+      if (t === 'P') {
+        // Simple pawn (not a combo) reaching back rank
+        const pc = promoChoice || 'Q';
+        board[tr][tc] = c + pc;
+      } else if (isOnCombo && extra && extra.comboUnitPromo) {
+        // Combo moving as unit, pawn is one of the two pieces — promote it
+        const pc = promoChoice || 'Q';
+        ng.combo[c].pieces = ng.combo[c].pieces.map(p => type(p) === 'P' ? c + pc : p);
+        // board square keeps the non-pawn piece identifier; visual is driven by ng.combo
+        board[tr][tc] = ng.combo[c].pieces.find(p => type(p) !== pc) || board[tr][tc];
+      }
+    }
+
+    moveNotation = buildNotation(g, fr, fc, tr, tc, extra, capturedPiece, promoChoice, isOnCombo);
+  }
+
+  // Update en passant
+  ng.enPassant = (extra && extra.doublePush) ? { r: (fr + tr) / 2, c: tc } : null;
+
+  // Update castling rights
+  if (t === 'K') { ng.castling[c + 'K'] = false; ng.castling[c + 'Q'] = false; }
+  if (t === 'R') {
+    if (fr === 7 && fc === 0) ng.castling.wQ = false;
+    if (fr === 7 && fc === 7) ng.castling.wK = false;
+    if (fr === 0 && fc === 0) ng.castling.bQ = false;
+    if (fr === 0 && fc === 7) ng.castling.bK = false;
+  }
+
+  ng.lastMove = { fr, fc, tr, tc };
+  ng.turn = opp;
+  ng.selected = null;
+  ng.validMoves = [];
+  ng.moves.push({ notation: moveNotation, color: c });
+  ng.pendingPromo = null;
+  ng.pendingDissolve = null;
+
+  return ng;
+}
+
+function buildNotation(g, fr, fc, tr, tc, extra, captured, promo, isCombo) {
+  const p = g.board[fr][fc];
+  const t = type(p);
+  const c = color(p);
+  const dest = squareName(tr, tc);
+  let n = '';
+  if (t === 'P') {
+    n = 'P';
+    if (captured) n += squareName(fr, fc)[0] + 'x';
+    else n += '';
+    n = n || '';
+    if (t === 'P' && !captured) n = '';
+    n = (captured ? squareName(fr, fc)[0] + 'x' : '') + dest;
+    if (promo) n += '=' + promo;
+  } else {
+    n = pieceToLetter(p);
+    if (captured) n += 'x';
+    n += dest;
+  }
+  if (isCombo) n += '(combo)';
+  return n;
+}
+
+function pieceToLetter(p) {
+  const t = type(p);
+  if (t === 'P') return '';
+  return t;
+}
+
+function squareName(r, c) {
+  return 'abcdefgh'[c] + (8 - r);
+}
+
+// ═══════════════════════════════════════════════════════
+//  CHECK / CHECKMATE / STALEMATE
+// ═══════════════════════════════════════════════════════
+
+function hasAnyLegalMove(g) {
+  const c = g.turn;
+  for (let r = 0; r < 8; r++) {
+    for (let cc = 0; cc < 8; cc++) {
+      const p = g.board[r][cc];
+      if (!p || color(p) !== c) continue;
+      if (legalMoves(g, r, cc).length > 0) return true;
+    }
+  }
+  return false;
+}
+
+function checkGameOver(g) {
+  if (!hasAnyLegalMove(g)) {
+    const inCheck = isInCheck(g.board, g.turn, g);
+    return inCheck ? 'checkmate' : 'stalemate';
+  }
+  return null;
+}
+
+// ═══════════════════════════════════════════════════════
+//  UI RENDERING
+// ═══════════════════════════════════════════════════════
+
+const boardEl = document.getElementById('board');
+const fileLabelsEl = document.getElementById('file-labels');
+
+function renderBoard() {
+  boardEl.innerHTML = '';
+  const flipped = false;
+
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const sq = document.createElement('div');
+      const isLight = (r + c) % 2 === 0;
+      sq.className = 'square ' + (isLight ? 'light' : 'dark');
+      sq.dataset.r = r;
+      sq.dataset.c = c;
+
+      // Highlights
+      if (G.selected && G.selected[0] === r && G.selected[1] === c) sq.classList.add('selected');
+      if (G.lastMove) {
+        if (G.lastMove.fr === r && G.lastMove.fc === c) sq.classList.add('last-move-from');
+        if (G.lastMove.tr === r && G.lastMove.tc === c) sq.classList.add('last-move-to');
+      }
+
+      const isValidMove = G.validMoves && G.validMoves.some(m => m.r === r && m.c === c);
+      if (isValidMove) {
+        sq.classList.add('move-hint');
+        const target = G.board[r][c];
+        if (target && color(target) !== G.turn) sq.classList.add('capture-hint');
+      }
+
+      // Piece rendering
+      const comboPiece = isComboSquare(G, r, c);
+      if (comboPiece && G.combo[comboPiece]) {
+        const cp = G.combo[comboPiece];
+        const sorted = sortComboPieces(cp.pieces);
+        const wrap = document.createElement('div');
+        wrap.className = 'combo-piece-wrap';
+        // upper-right: lower-value piece (index 1)
+        const topImg = pieceImg(sorted[1], 36);
+        topImg.className = 'piece-top';
+        // lower-left: higher-value piece (index 0)
+        const botImg = pieceImg(sorted[0], 36);
+        botImg.className = 'piece-bottom';
+        wrap.appendChild(topImg);
+        wrap.appendChild(botImg);
+        sq.appendChild(wrap);
+      } else {
+        const p = G.board[r][c];
+        if (p) {
+          const img = pieceImg(p, 58);
+          img.className = 'piece-img';
+          sq.appendChild(img);
+        }
+      }
+
+      sq.addEventListener('click', onSquareClick);
+      boardEl.appendChild(sq);
+    }
+  }
+
+  // File labels
+  fileLabelsEl.innerHTML = '';
+  for (const lbl of 'ABCDEFGH') {
+    const d = document.createElement('div');
+    d.className = 'coord-label';
+    d.textContent = lbl;
+    fileLabelsEl.appendChild(d);
+  }
+
+  // Rank labels (right side, 8 down to 1)
+  const rankLabelsEl = document.getElementById('rank-labels');
+  rankLabelsEl.innerHTML = '';
+  for (let r = 8; r >= 1; r--) {
+    const d = document.createElement('div');
+    d.className = 'rank-label';
+    d.textContent = r;
+    rankLabelsEl.appendChild(d);
+  }
+}
+
+function updateUI() {
+  // Turn indicator
+  const dot = document.getElementById('turn-dot');
+  dot.className = 'turn-dot ' + (G.turn === 'w' ? 'white' : 'black');
+  document.getElementById('turn-label').textContent = (G.turn === 'w' ? 'White' : 'Black') + "'s Turn";
+
+  // Combo status
+  const wc = G.combo.w;
+  const bc = G.combo.b;
+  const wcEl = document.getElementById('white-combo-status');
+  const bcEl = document.getElementById('black-combo-status');
+  if (wc) {
+    wcEl.textContent = wc.pieces.map(p => type(p)).join('+') + ' @' + squareName(wc.row, wc.col).toUpperCase();
+    wcEl.className = 'active';
+  } else { wcEl.textContent = 'none'; wcEl.className = ''; }
+  if (bc) {
+    bcEl.textContent = bc.pieces.map(p => type(p)).join('+') + ' @' + squareName(bc.row, bc.col).toUpperCase();
+    bcEl.className = 'active';
+  } else { bcEl.textContent = 'none'; bcEl.className = ''; }
+
+  // Captured pieces display removed
+
+  // Move log
+  const logEl = document.getElementById('move-log');
+  logEl.innerHTML = '';
+  const moves = G.moves;
+  for (let i = 0; i < moves.length; i += 2) {
+    const div = document.createElement('div');
+    div.className = 'move-pair';
+    const num = document.createElement('span');
+    num.className = 'move-num';
+    num.textContent = (i / 2 + 1) + '.';
+    const w = document.createElement('span');
+    w.className = 'move-w';
+    w.textContent = moves[i].notation;
+    const b = document.createElement('span');
+    b.className = 'move-b';
+    b.textContent = moves[i + 1] ? moves[i + 1].notation : '';
+    div.appendChild(num);
+    div.appendChild(w);
+    div.appendChild(b);
+    logEl.appendChild(div);
+  }
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function setMessage(msg) {
+  // message-bar element removed; no-op
+}
+
+// ═══════════════════════════════════════════════════════
+//  CLICK HANDLER
+// ═══════════════════════════════════════════════════════
+
+function onSquareClick(e) {
+  if (G.gameOver) return;
+  if (G.pendingPromo || G.pendingDissolve) return;
+
+  const r = parseInt(e.currentTarget.dataset.r);
+  const c = parseInt(e.currentTarget.dataset.c);
+  const piece = G.board[r][c];
+  const comboCol = isComboSquare(G, r, c);
+
+  // If something is selected
+  if (G.selected) {
+    const [sr, sc] = G.selected;
+
+    // Clicking same square deselects
+    if (sr === r && sc === c) {
+      G.selected = null;
+      G.validMoves = [];
+      renderBoard();
+      setMessage('Deselected.');
+      return;
+    }
+
+    // Check if this is a valid move destination
+    const matchingMove = G.validMoves.find(m => m.r === r && m.c === c);
+    if (matchingMove) {
+      executeMove(sr, sc, r, c, matchingMove);
+      return;
+    }
+
+    // Clicking another own piece - re-select
+    if (piece && color(piece) === G.turn) {
+      selectSquare(r, c);
+      return;
+    }
+
+    // Invalid - deselect
+    G.selected = null;
+    G.validMoves = [];
+    renderBoard();
+    setMessage('Invalid move. Select a piece.');
+    return;
+  }
+
+  // Nothing selected yet - try to select
+  if (piece && color(piece) === G.turn) {
+    selectSquare(r, c);
+  } else if (!piece) {
+    setMessage('That square is empty.');
+  } else {
+    setMessage("That's your opponent's piece.");
+  }
+}
+
+function selectSquare(r, c) {
+  const piece = G.board[r][c];
+  const comboCol = isComboSquare(G, r, c);
+  const isMyCombo = comboCol === G.turn;
+
+  G.selected = [r, c];
+  G.validMoves = legalMoves(G, r, c);
+
+  if (G.validMoves.length === 0) {
+    setMessage('No legal moves for this piece.');
+  } else {
+    if (isMyCombo) {
+      setMessage(`Combo piece selected (${G.combo[G.turn].pieces.map(p => PIECE_NAMES[type(p)]).join('+')}). Click a destination.`);
+    } else {
+      setMessage(`${PIECE_NAMES[type(piece)]} selected. ${G.validMoves.length} legal move(s).`);
+    }
+  }
+  renderBoard();
+}
+
+function executeMove(fr, fc, tr, tc, moveInfo) {
+  // Save state for undo
+  history.push(cloneState(G));
+
+  // Merge move: two friendly pieces combining into a combo.
+  if (moveInfo.merge) {
+    G = applyMove(G, fr, fc, tr, tc, moveInfo, null);
+    renderBoard();
+    updateUI();
+    afterMove();
+    return;
+  }
+
+  const isComboSq = isComboSquare(G, fr, fc) === G.turn;
+
+  // If moving a combo piece, determine whether the destination is a friendly piece.
+  // If so, "Both" is illegal (can't land a unit on a friendly), so skip the dialog
+  // and execute directly as the only legal interpretation: the one sub-piece that can
+  // reach the destination moves there (dissolving the combo on the origin and
+  // re-merging on the destination).
+  if (isComboSq) {
+    const comboInfo = G.combo[G.turn];
+    const destPiece = G.board[tr][tc];
+    const destIsFriendly = destPiece && color(destPiece) === G.turn;
+
+    // Check which sub-pieces can reach the destination.
+    // If the destination is a friendly piece, temporarily remove it from the board
+    // so that it doesn't block the path check (e.g. a pawn moving forward into a friendly).
+    const boardForCheck = cloneBoard(G.board);
+    if (destIsFriendly) boardForCheck[tr][tc] = null;
+    const piece1moves = rawMoves(boardForCheck, G.combo, fr, fc, type(comboInfo.pieces[0]), G.turn, G.enPassant, G.castling);
+    const piece2moves = rawMoves(boardForCheck, G.combo, fr, fc, type(comboInfo.pieces[1]), G.turn, G.enPassant, G.castling);
+    const canP1 = piece1moves.some(m => m.r === tr && m.c === tc);
+    const canP2 = piece2moves.some(m => m.r === tr && m.c === tc);
+
+    if (destIsFriendly) {
+      // "Both" is not an option — execute directly.
+      // If both sub-pieces can reach it, ask which one merges (no "Both" button).
+      if (canP1 && canP2 && type(comboInfo.pieces[0]) !== type(comboInfo.pieces[1])) {
+        showDissolveChoice(fr, fc, tr, tc, comboInfo, moveInfo, canP1, canP2, false);
+      } else if (canP1) {
+        doDissolveMove(fr, fc, tr, tc, comboInfo.pieces[0], moveInfo);
+      } else {
+        doDissolveMove(fr, fc, tr, tc, comboInfo.pieces[1], moveInfo);
+      }
+      return;
+    }
+
+    // Destination is empty or an enemy — show the full dialog including "Both".
+    showDissolveChoice(fr, fc, tr, tc, comboInfo, moveInfo, canP1, canP2, true);
+    return;
+  }
+
+  // Pawn promotion check (non-combo pawn)
+  const piece = G.board[fr][fc];
+  const t = type(piece);
+  const c = color(piece);
+  const promRank = c === 'w' ? 0 : 7;
+  if (t === 'P' && tr === promRank) {
+    showPromotion(fr, fc, tr, tc, moveInfo, null);
+    return;
+  }
+
+  // Castling with a combo rook: ask the player whether to castle with
+  // the combo as a unit (both pieces move to the rook destination)
+  // or dissolve (only the rook moves, the other piece stays on the corner).
+  if (moveInfo.castle) {
+    const rookCol = moveInfo.castle === 'K' ? 7 : 0;
+    const rookRow = c === 'w' ? 7 : 0;
+    const rookComboCol = isComboSquare(G, rookRow, rookCol);
+    if (rookComboCol === c) {
+      const rookDest = moveInfo.castle === 'K' ? 5 : 3;
+      showCastleComboChoice(fr, fc, tr, tc, moveInfo, rookRow, rookCol, rookDest);
+      return;
+    }
+  }
+
+  // Normal non-combo move
+  G = applyMove(G, fr, fc, tr, tc, moveInfo, null);
+  renderBoard();
+  updateUI();
+  afterMove();
+}
+
+function doDissolveMove(fr, fc, tr, tc, movingPiece, originalMoveInfo) {
+  const piece = G.board[fr][fc];
+  const c = color(piece);
+  const t = type(movingPiece);
+  const promRank = c === 'w' ? 0 : 7;
+
+  const dissolveExtra = { ...originalMoveInfo, dissolveMoving: movingPiece };
+
+  if (t === 'P' && tr === promRank) {
+    showPromotion(fr, fc, tr, tc, dissolveExtra, movingPiece);
+    return;
+  }
+
+  G = applyMove(G, fr, fc, tr, tc, dissolveExtra, null);
+  renderBoard();
+  updateUI();
+  afterMove();
+}
+
+// Show dialog when castling with a combo rook: move as unit or dissolve (rook only castles).
+function showCastleComboChoice(fr, fc, tr, tc, moveInfo, rookRow, rookCol, rookDest) {
+  const comboInfo = G.combo[G.turn];
+  const otherPiece = comboInfo.pieces.find(p => type(p) !== 'R');
+  const rookPiece  = comboInfo.pieces.find(p => type(p) === 'R');
+  const choices = document.getElementById('dissolve-choices');
+  choices.innerHTML = '';
+
+  // Option A: castle as unit — combo rook moves to rookDest with both pieces
+  const unitBtn = document.createElement('button');
+  unitBtn.className = 'dissolve-btn';
+  const sortedCastle = sortComboPieces(comboInfo.pieces);
+  const castleBothWrap = document.createElement('div');
+  castleBothWrap.style.cssText = 'position:relative;width:48px;height:48px;';
+  const ctopI = pieceImg(sortedCastle[1], 28);
+  ctopI.style.cssText = 'position:absolute;top:0;right:0;pointer-events:none;';
+  const cbotI = pieceImg(sortedCastle[0], 28);
+  cbotI.style.cssText = 'position:absolute;bottom:0;left:0;pointer-events:none;';
+  castleBothWrap.appendChild(ctopI);
+  castleBothWrap.appendChild(cbotI);
+  const castleBothLbl = document.createElement('span');
+  castleBothLbl.className = 'lbl';
+  castleBothLbl.textContent = 'Both';
+  unitBtn.appendChild(castleBothWrap);
+  unitBtn.appendChild(castleBothLbl);
+  unitBtn.onclick = () => {
+    closeDissolveModal();
+    G = applyMove(G, fr, fc, tr, tc, { ...moveInfo, castleRookAsUnit: true }, null);
+    renderBoard(); updateUI(); afterMove();
+  };
+  choices.appendChild(unitBtn);
+
+  // Option B: dissolve — only the rook moves to rookDest, other piece stays on corner
+  const dissolveBtn = document.createElement('button');
+  dissolveBtn.className = 'dissolve-btn';
+  const otherGlyph = otherPiece ? pieceGlyph(otherPiece) : '';
+  dissolveBtn.innerHTML = pieceGlyph(rookPiece) + `<span class="lbl">Rook only<br>${otherGlyph} stays</span>`;
+  dissolveBtn.onclick = () => {
+    closeDissolveModal();
+    G = applyMove(G, fr, fc, tr, tc, { ...moveInfo, castleRookDissolve: true }, null);
+    renderBoard(); updateUI(); afterMove();
+  };
+  choices.appendChild(dissolveBtn);
+
+  document.getElementById('dissolve-modal').querySelector('h3').textContent = 'Move which piece?';
+  document.getElementById('dissolve-modal').querySelector('p') && (document.getElementById('dissolve-modal').querySelector('p').remove());
+  document.getElementById('dissolve-modal').classList.add('open');
+}
+
+function afterMove() {
+  const result = checkGameOver(G);
+  if (result === 'checkmate') {
+    const winner = enemy(G.turn);
+    showGameOver('Checkmate!', `${winner === 'w' ? 'White' : 'Black'} wins by checkmate.`);
+    G.gameOver = true;
+  } else if (result === 'stalemate') {
+    showGameOver('Stalemate!', 'The game is a draw.');
+    G.gameOver = true;
+  } else {
+    const inCheck = isInCheck(G.board, G.turn, G);
+    if (inCheck) setMessage(`${G.turn === 'w' ? 'White' : 'Black'} is in check!`);
+    else setMessage(`${G.turn === 'w' ? 'White' : 'Black'} to move.`);
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  MODALS
+// ═══════════════════════════════════════════════════════
+
+let pendingPromoData = null;
+
+function showPromotion(fr, fc, tr, tc, moveInfo, movingPiece) {
+  const c = G.turn;
+  pendingPromoData = { fr, fc, tr, tc, moveInfo, movingPiece };
+
+  const choices = document.getElementById('promo-choices');
+  choices.innerHTML = '';
+
+  const allowed = [];
+  // Max 2 queens rule
+  if (G.queenCount[c] < 2) allowed.push('Q');
+  allowed.push('R', 'B', 'N');
+
+  const glyphs = { Q: c === 'w' ? '♕' : '♛', R: c === 'w' ? '♖' : '♜', B: c === 'w' ? '♗' : '♝', N: c === 'w' ? '♘' : '♞' };
+  for (const t of allowed) {
+    const btn = document.createElement('button');
+    btn.className = 'promo-btn';
+    btn.innerHTML = glyphs[t] + `<span class="lbl">${PIECE_NAMES[t]}</span>`;
+    btn.onclick = () => finishPromotion(t);
+    choices.appendChild(btn);
+  }
+
+  document.getElementById('promo-modal').classList.add('open');
+}
+
+function finishPromotion(choice) {
+  document.getElementById('promo-modal').classList.remove('open');
+  const { fr, fc, tr, tc, moveInfo, movingPiece } = pendingPromoData;
+  pendingPromoData = null;
+
+  if (choice === 'Q') G.queenCount[G.turn]++;
+
+  G = applyMove(G, fr, fc, tr, tc, moveInfo, choice);
+  renderBoard();
+  updateUI();
+  afterMove();
+}
+
+let pendingDissolveData = null;
+
+function showDissolveChoice(fr, fc, tr, tc, comboInfo, originalMove, canP1, canP2, showBoth = true) {
+  pendingDissolveData = { fr, fc, tr, tc, comboInfo, originalMove };
+  const choices = document.getElementById('dissolve-choices');
+  choices.innerHTML = '';
+
+  // Option 1: Move piece 0
+  if (canP1) {
+    const p = comboInfo.pieces[0];
+    const btn = document.createElement('button');
+    btn.className = 'dissolve-btn';
+    btn.innerHTML = pieceGlyph(p) + `<span class="lbl">${PIECE_NAMES[type(p)]}</span>`;
+    btn.onclick = () => { closeDissolveModal(); doDissolveMove(fr, fc, tr, tc, p, originalMove); };
+    choices.appendChild(btn);
+  }
+  // Option 2: Move piece 1
+  if (canP2) {
+    const p = comboInfo.pieces[1];
+    const btn = document.createElement('button');
+    btn.className = 'dissolve-btn';
+    btn.innerHTML = pieceGlyph(p) + `<span class="lbl">${PIECE_NAMES[type(p)]}</span>`;
+    btn.onclick = () => { closeDissolveModal(); doDissolveMove(fr, fc, tr, tc, p, originalMove); };
+    choices.appendChild(btn);
+  }
+  // Option 3: Move as unit — only shown when landing on an empty or enemy square
+  if (showBoth) {
+    const unitBtn = document.createElement('button');
+    unitBtn.className = 'dissolve-btn';
+    const sortedBoth = sortComboPieces(comboInfo.pieces);
+    const bothWrap = document.createElement('div');
+    bothWrap.style.cssText = 'position:relative;width:48px;height:48px;';
+    const topI = pieceImg(sortedBoth[1], 28);
+    topI.style.cssText = 'position:absolute;top:0;right:0;pointer-events:none;';
+    const botI = pieceImg(sortedBoth[0], 28);
+    botI.style.cssText = 'position:absolute;bottom:0;left:0;pointer-events:none;';
+    bothWrap.appendChild(topI);
+    bothWrap.appendChild(botI);
+    const bothLbl = document.createElement('span');
+    bothLbl.className = 'lbl';
+    bothLbl.textContent = 'Both';
+    unitBtn.appendChild(bothWrap);
+    unitBtn.appendChild(bothLbl);
+    unitBtn.onclick = () => {
+      closeDissolveModal();
+      const hasPawn = comboInfo.pieces.some(p => type(p) === 'P');
+      const movingColor = color(comboInfo.pieces[0]);
+      const promRank = movingColor === 'w' ? 0 : 7;
+      if (hasPawn && tr === promRank) {
+        showPromotion(fr, fc, tr, tc, { ...originalMove, comboUnitPromo: true }, null);
+        return;
+      }
+      G = applyMove(G, fr, fc, tr, tc, originalMove, null);
+      renderBoard(); updateUI(); afterMove();
+    };
+    choices.appendChild(unitBtn);
+  }
+
+  document.getElementById('dissolve-modal').classList.add('open');
+}
+
+function closeDissolveModal() {
+  document.getElementById('dissolve-modal').classList.remove('open');
+  pendingDissolveData = null;
+}
+
+function showGameOver(title, desc) {
+  document.getElementById('gameover-title').textContent = title;
+  document.getElementById('gameover-desc').textContent = desc;
+  document.getElementById('gameover-banner').classList.add('open');
+}
+
+function closeAllModals() {
+  document.getElementById('promo-modal').classList.remove('open');
+  document.getElementById('dissolve-modal').classList.remove('open');
+  document.getElementById('gameover-banner').classList.remove('open');
+}
+
+// ═══════════════════════════════════════════════════════
+//  UNDO
+// ═══════════════════════════════════════════════════════
+function undoMove() {
+  if (history.length === 0) { setMessage('Nothing to undo.'); return; }
+  G = history.pop();
+  closeAllModals();
+  renderBoard();
+  updateUI();
+  setMessage('Move undone.');
+}
+
+// ═══════════════════════════════════════════════════════
+//  START
+// ═══════════════════════════════════════════════════════
+newGame();
+</script>
+</body>
+</html>
